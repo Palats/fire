@@ -1,0 +1,144 @@
+<html>
+<head>
+  <!-- A bit of inspiration from http://demo-effects.sourceforge.net/ -->
+  <title>Un logo en flammes!</title>
+  <style type="text/css">
+    html, body {
+      height: 100%;
+      padding: 0;
+      margin: 0;
+    }
+
+    #backbuffer {
+      visibility: hidden;
+      display: none;
+    }
+
+    #info {
+      position: absolute;
+      background-color: black;
+      color: white;
+      left: 0;
+      top: 0;
+    }
+  </style>
+  <script type="text/javascript">
+
+  fire = {};
+  fire.height = 200;
+  fire.width = 320;
+  fire.newspots = 0.2;  // Chances of having a new white spot on a given pixel
+  fire.maxfps = 25;
+  fire.decay = 0.5;
+
+  // Display already rendered fire on the screen
+  fire.render = function() {
+    // We first draw the fire in an ImageData so we have fast pixel manipulation.
+    var cxt = fire.backbuffer.getContext("2d");
+    var img = cxt.getImageData(0, 0, fire.width, fire.height);
+
+    var index = 0;
+    for (var y = 0; y < fire.height; y++) {
+      var line = fire.buffer[y];
+      for (var x = 0; x < fire.width; x++) {
+        var color = fire.palette[Math.floor(line[x])];
+        img.data[index] = color[0];
+        img.data[index + 1] = color[1];
+        img.data[index + 2] = color[2];
+        img.data[index + 3] = 255;
+
+        index += 4;
+      }
+    }
+
+    // Now that it's rendered, put those pixels on the backbuffer, a hidden
+    // canvas of the exact size of the fire.
+    cxt.putImageData(img, 0, 0);
+
+    // Now that we have our picture on a proper canvas, we can draw it on the
+    // real canvas. Having this 2 steps process allows to easily scale the fire
+    // (of fixed size) to the actual size of the page, while taking advantage
+    // of the browser scaling methods.
+    if ((fire.canvas.width != document.body.clientWidth) || (fire.canvas.height != document.body.clientHeight)) {
+      fire.canvas.width = document.body.clientWidth;
+      fire.canvas.height = document.body.clientHeight;
+    }
+    var display = fire.canvas.getContext("2d");
+    display.drawImage(fire.backbuffer, 0, 0, fire.canvas.width, fire.canvas.height);
+  };
+
+  // Make the fire evolve by one frame and render it.
+  fire.step = function() {
+    var start = new Date();
+
+    // Generate some new hot spot at the bottom.
+    for (var x = 0; x < fire.width; x++) {
+      var r = Math.random();
+      var color = 0;
+      if (r < fire.newspots) {
+        color = 255;
+      }
+      fire.buffer[fire.height-1][x] = color;
+    }
+
+    // And make the fire goes up, by average neighbors.
+    for (var y = fire.height-2; y >= 0; y--) {
+      var line = fire.buffer[y];
+      var prevline = fire.buffer[y+1];
+      for (var x = 1; x < fire.width-1; x++) {
+        var color = (
+          prevline[x-1] + prevline[x] + prevline[x+1] + line[x]
+        ) / 4;
+
+        // Apply some decay. It avoids having the fire goes too far up, which
+        // is fairly ugly.
+        color = Math.max(0, color - fire.decay);
+        line[x] = color;
+      }
+    }
+
+    fire.render();
+
+    var end = new Date();
+    var diff = end - start;
+    document.getElementById("info").innerHTML = (1000/diff).toFixed(1) + " fps [" + (end - start).toString() + "ms]";
+  };
+
+  // Misc. initialization, and starting the render loop.
+  fire.main = function() {
+    fire.canvas = document.getElementById("zeCanvas");
+
+    fire.backbuffer = document.getElementById("backbuffer");
+    fire.backbuffer.width = fire.width;
+    fire.backbuffer.height = fire.height;
+
+    fire.palette = new Array();
+    for (var i = 0; i < 32; i++) {
+      fire.palette[i] = [0, 0, i*2];
+      fire.palette[i+32] = [i*8, 0, 64 - i*2];
+      fire.palette[i+64] = [255, i*8, 0];
+      fire.palette[i+96] = [255, 255, i*4];
+      fire.palette[i+128] = [255, 255, 64+i*4];
+      fire.palette[i+160] = [255, 255, 128+i*4];
+      fire.palette[i+192] = [255, 255, 192+i];
+      fire.palette[i+224] = [255, 255, 224+i];
+    }
+
+    fire.buffer = new Array();
+    for (var y = 0; y < fire.height; y++) {
+      fire.buffer[y] = new Array()
+      for (var x = 0; x < fire.width; x++) {
+        fire.buffer[y][x] = 0;
+      }
+    }
+
+    setInterval(fire.step, 1000/fire.maxfps);
+  };
+  </script>
+</head>
+<body onLoad="fire.main()">
+<div id="info">...</div>
+<canvas id="backbuffer"></canvas>
+<canvas id="zeCanvas"></canvas>
+</body>
+</html>
